@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>postsmith gallery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Space+Grotesk:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0e0e10;
+    --surface: #161517;
+    --line: #2a2930;
+    --text: #ece7de;
+    --muted: #8c887f;
+    --accent: #e8743b;
+    --display: "Fraunces", Georgia, "Times New Roman", serif;
+    --body: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { margin: 0; background: var(--ink); color: var(--text); }
+
+  body {
+    font-family: var(--body);
+    -webkit-font-smoothing: antialiased;
+    padding: 0 clamp(20px, 5vw, 72px) 96px;
+  }
+
+  header {
+    padding: 56px 0 28px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 44px;
+  }
+
+  .back {
+    display: inline-block;
+    margin-bottom: 22px;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+  }
+
+  .back:hover { color: var(--accent); }
+
+  .mark {
+    font-family: var(--body);
+    text-transform: uppercase;
+    letter-spacing: 0.42em;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .mark::before {
+    content: "";
+    display: inline-block;
+    width: 28px;
+    height: 2px;
+    background: var(--accent);
+    vertical-align: middle;
+    margin-right: 14px;
+  }
+
+  h1 {
+    font-family: var(--display);
+    font-weight: 900;
+    font-size: clamp(40px, 8vw, 96px);
+    line-height: 0.96;
+    margin: 22px 0 0;
+    max-width: 16ch;
+  }
+
+  h1 .dot { color: var(--accent); }
+
+  .meta {
+    margin-top: 22px;
+    color: var(--muted);
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 22px;
+  }
+
+  .meta b { color: var(--text); font-weight: 500; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+    gap: 40px 32px;
+  }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+
+  .shot {
+    margin: 0;
+    background:
+      repeating-conic-gradient(#1b1a1d 0% 25%, #131214 0% 50%) 50% / 26px 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .shot img {
+    display: block;
+    width: 100%;
+    height: auto;
+    cursor: zoom-in;
+  }
+
+  .body { padding: 18px 20px 22px; }
+
+  .row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 14px;
+  }
+
+  .id {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 30px;
+    letter-spacing: 0.01em;
+  }
+
+  .cost {
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+    font-size: 15px;
+  }
+
+  .dims {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+  }
+
+  .prompt {
+    margin: 16px 0 0;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: #c8c3ba;
+    max-height: 8.5em;
+    overflow: auto;
+    white-space: pre-wrap;
+    padding-right: 6px;
+  }
+
+  .prompt::-webkit-scrollbar { width: 6px; }
+  .prompt::-webkit-scrollbar-thumb { background: var(--line); }
+
+  .download {
+    display: inline-block;
+    margin-top: 18px;
+    color: var(--text);
+    text-decoration: none;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    border-bottom: 1px solid var(--accent);
+    padding-bottom: 3px;
+  }
+
+  .download:hover { color: var(--accent); }
+
+  .jobcard {
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+  }
+
+  .jobcard:hover { border-color: var(--accent); transform: translateY(-3px); }
+
+  .jobcard .shot { aspect-ratio: 4 / 5; }
+
+  .jobcard .shot img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
+
+  .jobname {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 24px;
+    line-height: 1.1;
+    word-break: break-word;
+  }
+
+  .empty {
+    margin-top: 40px;
+    color: var(--muted);
+    font-size: 16px;
+    max-width: 50ch;
+    line-height: 1.6;
+  }
+
+  .lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(8, 8, 9, 0.92);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5vh 5vw;
+    cursor: zoom-out;
+    z-index: 10;
+  }
+
+  .lightbox[hidden] { display: none; }
+
+  .lightbox img {
+    max-width: 100%;
+    max-height: 100%;
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6);
+  }
+</style>
+</head>
+<body>
+  <header>
+    <a id="back" class="back" href="../../" hidden>&larr; all jobs</a>
+    <div class="mark">postsmith</div>
+    <h1 id="job-title">loading<span class="dot">.</span></h1>
+    <div class="meta" id="job-meta"></div>
+  </header>
+
+  <main id="grid" class="grid"></main>
+  <p id="empty" class="empty" hidden></p>
+
+  <div id="lightbox" class="lightbox" hidden>
+    <img id="lightbox-img" alt="">
+  </div>
+
+<script>
+  function el(tag, className) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    return node;
+  }
+
+  function money(value) {
+    return "$" + Number(value || 0).toFixed(3);
+  }
+
+  function dateOf(iso) {
+    return iso ? String(iso).slice(0, 10) : "";
+  }
+
+  function setTitle(text) {
+    const title = document.getElementById("job-title");
+    title.textContent = text;
+    const dot = el("span", "dot");
+    dot.textContent = ".";
+    title.appendChild(dot);
+  }
+
+  function addMeta(bits) {
+    const meta = document.getElementById("job-meta");
+    meta.textContent = "";
+    for (const [label, value] of bits) {
+      if (!value) continue;
+      const span = el("span");
+      const strong = el("b");
+      strong.textContent = value;
+      span.append(label + " ", strong);
+      meta.appendChild(span);
+    }
+  }
+
+  function openLightbox(src) {
+    document.getElementById("lightbox-img").src = src;
+    document.getElementById("lightbox").hidden = false;
+  }
+
+  function closeLightbox() {
+    document.getElementById("lightbox").hidden = true;
+    document.getElementById("lightbox-img").src = "";
+  }
+
+  function renderFrame(frame, data) {
+    const card = el("article", "card");
+
+    const figure = el("figure", "shot");
+    const img = el("img");
+    img.src = frame.file;
+    img.alt = "slide " + frame.id;
+    img.loading = "lazy";
+    img.addEventListener("click", () => openLightbox(frame.file));
+    figure.appendChild(img);
+    card.appendChild(figure);
+
+    const body = el("div", "body");
+
+    const row = el("div", "row");
+    const id = el("span", "id");
+    id.textContent = frame.id;
+    const cost = el("span", "cost");
+    cost.textContent = money(frame.cost);
+    row.append(id, cost);
+    body.appendChild(row);
+
+    const dims = el("div", "dims");
+    dims.textContent = (data.format || "") + " · " + (data.size || "");
+    body.appendChild(dims);
+
+    const prompt = el("p", "prompt");
+    prompt.textContent = frame.prompt || "";
+    body.appendChild(prompt);
+
+    const link = el("a", "download");
+    link.href = frame.file;
+    link.download = frame.id + ".png";
+    link.textContent = "Download";
+    body.appendChild(link);
+
+    card.appendChild(body);
+    return card;
+  }
+
+  function renderJob(data) {
+    setTitle(data.name || "untitled");
+    addMeta([
+      ["model", data.model],
+      ["format", (data.format || "") + "  " + (data.size || "")],
+      ["quality", data.quality],
+      ["total", money(data.total_cost)],
+    ]);
+    if (document.referrer) {
+      document.getElementById("back").hidden = false;
+    }
+    const grid = document.getElementById("grid");
+    for (const frame of data.frames || []) {
+      grid.appendChild(renderFrame(frame, data));
+    }
+  }
+
+  function renderJobCard(job) {
+    const card = el("a", "card jobcard");
+    card.href = "jobs/" + job.id + "/";
+
+    const figure = el("figure", "shot");
+    if (job.thumb) {
+      const img = el("img");
+      img.src = "jobs/" + job.id + "/" + job.thumb;
+      img.alt = job.name || job.id;
+      img.loading = "lazy";
+      figure.appendChild(img);
+    }
+    card.appendChild(figure);
+
+    const body = el("div", "body");
+
+    const row = el("div", "row");
+    const name = el("span", "jobname");
+    name.textContent = job.name || job.id;
+    const cost = el("span", "cost");
+    cost.textContent = money(job.cost);
+    row.append(name, cost);
+    body.appendChild(row);
+
+    const dims = el("div", "dims");
+    const frames = (job.frames || 0) + (job.frames === 1 ? " frame" : " frames");
+    dims.textContent = dateOf(job.created) + " · " + (job.format || "") + " · " + frames;
+    body.appendChild(dims);
+
+    card.appendChild(body);
+    return card;
+  }
+
+  function renderHistory(registry) {
+    const jobs = (registry.jobs || []).slice();
+    jobs.sort((a, b) => String(b.created || "").localeCompare(String(a.created || "")));
+    setTitle("All jobs");
+    const total = jobs.reduce((sum, job) => sum + Number(job.cost || 0), 0);
+    addMeta([
+      ["jobs", String(jobs.length)],
+      ["spent", money(total)],
+    ]);
+    if (jobs.length === 0) {
+      showEmpty("No jobs yet. Run a generate, then refresh this page.");
+      return;
+    }
+    const grid = document.getElementById("grid");
+    for (const job of jobs) {
+      grid.appendChild(renderJobCard(job));
+    }
+  }
+
+  function showEmpty(message) {
+    document.getElementById("job-title").textContent = "nothing here yet";
+    const empty = document.getElementById("empty");
+    empty.hidden = false;
+    empty.textContent = message;
+  }
+
+  async function fetchJson(url) {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error("missing " + url);
+    return res.json();
+  }
+
+  async function load() {
+    try {
+      renderJob(await fetchJson("manifest.json"));
+      return;
+    } catch (jobError) {
+      try {
+        renderHistory(await fetchJson("registry.json"));
+        return;
+      } catch (historyError) {
+        showEmpty("Could not load manifest.json or registry.json. Generate a job first.");
+      }
+    }
+  }
+
+  document.getElementById("lightbox").addEventListener("click", closeLightbox);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeLightbox();
+  });
+
+  load();
+</script>
+</body>
+</html>

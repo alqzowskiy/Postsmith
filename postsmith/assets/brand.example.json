@@ -1,0 +1,30 @@
+{
+  "brand_name": "Northbound Coffee",
+  "default_language": "en",
+  "palette": {
+    "dominant": "#0E3B2E",
+    "surface": "#F4EFE6",
+    "accent": "#E8743B"
+  },
+  "fonts": {
+    "display": "Fraunces",
+    "body": "Söhne"
+  },
+  "tone": ["warm", "confident", "unfussy", "editorial"],
+  "light": "low afternoon side light, long soft shadows, single window source",
+  "grid": "wide left margin, subject anchored lower-right third, generous negative space",
+  "references": [
+    "Kinfolk magazine spreads",
+    "Aesop product photography",
+    "1970s field-guide illustration"
+  ],
+  "never": [
+    "glossy 3D plastic blobs",
+    "purple-to-blue gradients on white",
+    "dead-center symmetry",
+    "fake bokeh particle filler",
+    "blown-out HDR highlights",
+    "smeared or misspelled text",
+    "stock-photo handshake staging"
+  ]
+}
