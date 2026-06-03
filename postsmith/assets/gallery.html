@@ -111,7 +111,8 @@
     overflow: hidden;
   }
 
-  .shot img {
+  .shot img,
+  .frame-canvas {
     display: block;
     width: 100%;
     height: auto;
@@ -286,23 +287,96 @@
     document.getElementById("lightbox-img").src = "";
   }
 
-  function renderFrame(frame, data) {
-    const card = el("article", "card");
+  function resolveColor(value, brand, fallback) {
+    if (!value) value = fallback;
+    const palette = (brand && brand.palette) || {};
+    if (palette[value]) return palette[value];
+    const named = { white: "#FFFFFF", black: "#0E0E10", ink: "#0E0E10" };
+    if (named[value]) return named[value];
+    return value;
+  }
 
-    const figure = el("figure", "shot");
-    const img = el("img");
-    img.src = frame.file;
-    img.alt = "slide " + frame.id;
-    img.loading = "lazy";
-    img.addEventListener("click", () => openLightbox(frame.file));
-    figure.appendChild(img);
-    card.appendChild(figure);
+  function wrapText(ctx, text, maxWidth) {
+    const words = (text || "").split(/\s+/).filter(Boolean);
+    if (!words.length) return [];
+    const lines = [];
+    let line = words[0];
+    for (let i = 1; i < words.length; i++) {
+      const candidate = line + " " + words[i];
+      if (ctx.measureText(candidate).width <= maxWidth) {
+        line = candidate;
+      } else {
+        lines.push(line);
+        line = words[i];
+      }
+    }
+    lines.push(line);
+    return lines;
+  }
 
+  function paintCaption(canvas, img, caption, brand) {
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, w, h);
+
+    const margin = Math.round(w * 0.07);
+    const maxWidth = w - 2 * margin;
+    const headSize = Math.max(18, Math.round(w * 0.075));
+    const subSize = Math.max(12, Math.round(w * 0.03));
+    const shadow = Math.max(1, Math.round(w * 0.004));
+    const fonts = (brand && brand.fonts) || {};
+    const headFamily = '"' + (fonts.display || "Fraunces") + '", "Fraunces", Georgia, serif';
+    const subFamily = '"' + (fonts.body || "Space Grotesk") + '", "Space Grotesk", sans-serif';
+    const headColor = resolveColor(caption.color, brand, "white");
+    const accent = (brand && brand.palette && brand.palette.accent) || "white";
+    const subColor = resolveColor(caption.subcolor || accent, brand, "white");
+
+    ctx.textBaseline = "top";
+    const headFont = "900 " + headSize + "px " + headFamily;
+    const subFont = "500 " + subSize + "px " + subFamily;
+    ctx.font = headFont;
+    const headLines = wrapText(ctx, caption.headline, maxWidth);
+    ctx.font = subFont;
+    const subLines = wrapText(ctx, caption.subhead, maxWidth);
+
+    const blocks = [];
+    for (const line of headLines) {
+      blocks.push({ line, font: headFont, color: headColor, step: Math.round(headSize * 1.06) });
+    }
+    if (headLines.length && subLines.length) {
+      blocks.push({ line: "", font: subFont, color: subColor, step: Math.round(subSize * 0.7) });
+    }
+    for (const line of subLines) {
+      blocks.push({ line, font: subFont, color: subColor, step: Math.round(subSize * 1.35) });
+    }
+
+    const total = blocks.reduce((sum, block) => sum + block.step, 0);
+    const position = caption.position || "top-left";
+    let y;
+    if (position.indexOf("bottom") >= 0) y = h - margin - total;
+    else if (position.indexOf("center") >= 0) y = Math.round((h - total) / 2);
+    else y = margin;
+
+    for (const block of blocks) {
+      if (block.line) {
+        ctx.font = block.font;
+        ctx.fillStyle = "rgba(0,0,0,0.6)";
+        ctx.fillText(block.line, margin + shadow, y + shadow);
+        ctx.fillStyle = block.color;
+        ctx.fillText(block.line, margin, y);
+      }
+      y += block.step;
+    }
+  }
+
+  function frameMeta(frame, data) {
     const body = el("div", "body");
-
     const row = el("div", "row");
     const id = el("span", "id");
-    id.textContent = frame.id;
+    id.textContent = frame.variant > 1 ? frame.id + " · v" + frame.variant : frame.id;
     const cost = el("span", "cost");
     cost.textContent = money(frame.cost);
     row.append(id, cost);
@@ -315,13 +389,62 @@
     const prompt = el("p", "prompt");
     prompt.textContent = frame.prompt || "";
     body.appendChild(prompt);
+    return body;
+  }
 
-    const link = el("a", "download");
-    link.href = frame.file;
-    link.download = frame.id + ".png";
-    link.textContent = "Download";
-    body.appendChild(link);
+  function variantName(frame) {
+    return frame.id + (frame.variant > 1 ? "-" + frame.variant : "") + ".png";
+  }
 
+  function renderFrame(frame, data) {
+    const card = el("article", "card");
+    const figure = el("figure", "shot");
+    const body = frameMeta(frame, data);
+    const overlay = frame.caption && !frame.text_baked;
+
+    if (overlay) {
+      const canvas = el("canvas", "frame-canvas");
+      const img = new Image();
+      img.onload = () => {
+        const draw = () => paintCaption(canvas, img, frame.caption, data.brand || {});
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
+        else draw();
+      };
+      img.src = frame.file;
+      canvas.addEventListener("click", () => openLightbox(canvas.toDataURL("image/png")));
+      figure.appendChild(canvas);
+
+      const link = el("a", "download");
+      link.href = "#";
+      link.textContent = "Download";
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        canvas.toBlob((blob) => {
+          const url = URL.createObjectURL(blob);
+          const tmp = document.createElement("a");
+          tmp.href = url;
+          tmp.download = variantName(frame);
+          tmp.click();
+          URL.revokeObjectURL(url);
+        }, "image/png");
+      });
+      body.appendChild(link);
+    } else {
+      const img = el("img");
+      img.src = frame.file;
+      img.alt = "slide " + frame.id;
+      img.loading = "lazy";
+      img.addEventListener("click", () => openLightbox(frame.file));
+      figure.appendChild(img);
+
+      const link = el("a", "download");
+      link.href = frame.file;
+      link.download = variantName(frame);
+      link.textContent = "Download";
+      body.appendChild(link);
+    }
+
+    card.appendChild(figure);
     card.appendChild(body);
     return card;
   }

@@ -28,10 +28,27 @@ def install_gallery(target_dir):
     shutil.copyfile(gallery_source(), os.path.join(target_dir, "index.html"))
 
 
+def open_server(handler, port):
+    for candidate in range(port, port + 20):
+        try:
+            return Gallery((HOST, candidate), handler), candidate
+        except OSError:
+            continue
+    return None, port
+
+
 def serve_dir(root, port, no_open):
     handler = functools.partial(QuietHandler, directory=root)
+    server, port = open_server(handler, port)
+    if server is None:
+        print(
+            "Ports " + str(port) + "-" + str(port + 19) + " are busy. "
+            "Free one or pass --port.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     url = "http://" + HOST + ":" + str(port) + "/"
-    with Gallery((HOST, port), handler) as server:
+    with server:
         print("Serving " + root)
         print("Gallery at " + url)
         print("Press Ctrl+C to stop.")

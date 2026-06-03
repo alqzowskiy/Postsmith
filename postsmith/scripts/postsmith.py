@@ -33,6 +33,8 @@ def main(argv=None):
 
     g = sub.add_parser("generate", help="generate images for a job")
     g.add_argument("--job", help="job id under .postsmith/jobs/ (default: latest)")
+    g.add_argument("--only", help="comma-separated slide ids to reshoot")
+    g.add_argument("-n", "--variants", type=int, default=1, help="versions per slide")
     g.add_argument("--yes", action="store_true", help="skip both confirmations")
 
     s = sub.add_parser("serve", help="serve a job gallery or the job history")
@@ -51,7 +53,7 @@ def main(argv=None):
     elif args.command == "wizard":
         wizard.run()
     elif args.command == "generate":
-        generate.run(args.job, assume_yes=args.yes)
+        generate.run(args.job, assume_yes=args.yes, only=args.only, variants=args.variants)
     elif args.command == "serve":
         serve.run(job=args.job, port=args.port, no_open=args.no_open)
     elif args.command == "export":

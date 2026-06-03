@@ -6,6 +6,26 @@ All notable changes to postsmith are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- `serve` no longer crashes with a raw traceback when the port is in use; it now tries the
+  next free port (up to +20) and prints a clean message if none is available.
+
+## [0.3.0] - 2026-06-03
+
+### Added
+- Free-text **style** field, asked on every job and threaded into branded prompts
+  (`Overall visual style: <style>.`). Any treatment works — anime, high-tech futuristic,
+  35mm film, 3D render, risograph.
+- **Exact text overlay** (`text_mode: "overlay"`): the model renders only the background and
+  postsmith composites guaranteed-correct captions from a per-slide `caption` object — in the
+  gallery via `<canvas>` for everyone (zero dependencies, downloadable as PNG), and baked into
+  the saved PNG when Pillow is installed. `baked` (model letters the text) stays the default.
+- **Variants** (`generate -n N`): N versions of each slide, saved `01.png`, `01-2.png`, ….
+- **Reshoot** (`generate --only 02,04`): regenerate just those slides, merge into the existing
+  manifest, and update registry totals.
+- Manifest now records `style`, `text_mode`, a `brand` summary (palette + fonts), and per-frame
+  `variant` / `caption` / `text_baked`. New `.postsmith/fonts/` folder for brand `.ttf`/`.otf`.
+
 ## [0.2.0] - 2026-06-02
 
 ### Added

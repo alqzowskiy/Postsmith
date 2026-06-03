@@ -18,6 +18,8 @@ def default_config():
             "format": "4:5",
             "quality": "low",
             "language": "en",
+            "style": "editorial photo",
+            "text_mode": "baked",
             "port": 4848,
         },
     }
@@ -69,6 +71,10 @@ def jobs_dir(workspace):
 
 def exports_dir(workspace):
     return os.path.join(workspace, "exports")
+
+
+def fonts_dir(workspace):
+    return os.path.join(workspace, "fonts")
 
 
 def job_dir(workspace, job_id):
@@ -193,6 +199,7 @@ def init_workspace(start=None):
     workspace = resolve_workspace(create=True, start=start)
     os.makedirs(jobs_dir(workspace), exist_ok=True)
     os.makedirs(exports_dir(workspace), exist_ok=True)
+    os.makedirs(fonts_dir(workspace), exist_ok=True)
     write_json_if_absent(config_path(workspace), default_config())
     write_json_if_absent(registry_path(workspace), {"jobs": []})
     target = brand_path(workspace)

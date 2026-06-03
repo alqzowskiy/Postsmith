@@ -76,13 +76,30 @@ def run():
     mode_choice = ask("Prompt mode?", ["auto", "raw", "assisted"], "auto")
     fmt = ask("Format?", ["4:5", "9:16", "1:1", "16:9"], defaults.get("format", "4:5"))
     quality = ask("Quality?", ["low", "medium", "high"], defaults.get("quality", "low"))
+    style = ask_text(
+        "Visual style? (free text, e.g. editorial photo, anime, high-tech futuristic, "
+        "35mm film, 3D render, flat illustration)",
+        defaults.get("style", "editorial photo"),
+    )
+    text_choice = ask(
+        "Text rendering?  baked = the model letters the captions; "
+        "overlay = postsmith composites exact, guaranteed-correct captions on top",
+        ["baked", "overlay"],
+        defaults.get("text_mode", "baked"),
+    )
     language = ask_text(
         "Caption language?", brand_language(brand_file, defaults.get("language", "en"))
     )
     count = ask_int("Number of slides?", 3)
     name = ask_text("Job name?", "postsmith-job")
 
-    slides = [{"id": format(n, "02d"), "prompt": ""} for n in range(1, count + 1)]
+    text_mode = "overlay" if text_choice == "overlay" else "baked"
+    slides = []
+    for n in range(1, count + 1):
+        slide = {"id": format(n, "02d"), "prompt": ""}
+        if text_mode == "overlay":
+            slide["caption"] = {"headline": "", "subhead": "", "position": "top-left"}
+        slides.append(slide)
 
     job = {
         "name": name,
@@ -90,6 +107,8 @@ def run():
         "format": fmt,
         "size": SIZE_BY_FORMAT.get(fmt, "1024x1536"),
         "quality": quality,
+        "style": style,
+        "text_mode": text_mode,
         "language": language,
         "model": "gpt-image-2-2026-04-21",
         "brand_path": config.get("brand_path", ".postsmith/brand.json"),

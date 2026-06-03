@@ -72,6 +72,8 @@ The final prompt sent to the API depends on `mode`:
   "format": "4:5",
   "size": "1024x1536",
   "quality": "low",
+  "style": "editorial photo",
+  "text_mode": "baked",
   "language": "en",
   "model": "gpt-image-2-2026-04-21",
   "brand_path": ".postsmith/brand.json",
@@ -82,7 +84,43 @@ The final prompt sent to the API depends on `mode`:
 }
 ```
 
-`mode` is `branded` or `raw`. `branded` composes `master` + slide prompt; `raw` sends the
-slide prompt unchanged. `size` is derived from `format` (`1:1` → `1024x1024`; `4:5` and
-`9:16` → `1024x1536`; `16:9` → `1536x1024`). Every slide needs a non-empty `prompt` before
-generation will run.
+`mode` is `branded` or `raw`. `branded` composes `style` + `master` + slide prompt; `raw`
+sends the slide prompt unchanged. `size` is derived from `format` (`1:1` → `1024x1024`; `4:5`
+and `9:16` → `1024x1536`; `16:9` → `1536x1024`). Every slide needs a non-empty `prompt`
+before generation will run.
+
+## Style
+
+`style` is free text describing the rendering treatment — `editorial photo`, `anime`,
+`high-tech futuristic`, `35mm film`, `3D render`, `flat illustration`, `risograph`. It is
+prepended to every branded prompt as `Overall visual style: <style>.` so the whole set shares
+one medium. Always ask the user for it and accept whatever they type; never lock them to a
+list. Ignored in `raw` mode.
+
+## Text mode: baked vs overlay
+
+`text_mode` is `baked` (default) or `overlay`.
+
+- **baked** — gpt-image-2 letters the captions. Put the words, quoted, in the slide prompt.
+  Fast, but spelling/numbers can come out wrong; verify in self-review.
+- **overlay** — the model renders only the background; postsmith composites the exact caption
+  on top (gallery canvas for everyone, baked into the PNG when Pillow is present). Do **not**
+  put the words in the prompt; describe the scene and leave the caption area clear. Put the
+  words in a per-slide `caption`:
+
+```json
+{
+  "id": "01",
+  "prompt": "a single matte kraft coffee bag in the lower-right third, side light",
+  "caption": {
+    "headline": "NEW SINGLE ORIGIN",
+    "subhead": "Ethiopia · Guji — Hambela",
+    "position": "top-left",
+    "color": "surface"
+  }
+}
+```
+
+`position` is `top-left`, `bottom-left`, or `center-left`. `color` is optional — a brand
+palette key (`dominant` / `surface` / `accent`) or a hex value; it defaults to white with a
+soft shadow for legibility. Use overlay whenever prices, dates, or exact copy must be right.

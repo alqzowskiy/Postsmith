@@ -1,5 +1,6 @@
 import argparse
 import base64
+import glob
 import io
 import json
 import os
@@ -7,6 +8,7 @@ import sys
 import urllib.error
 import urllib.request
 
+import textlayer
 import workspace
 
 
@@ -29,9 +31,9 @@ def load_job(job_file):
         return json.load(handle)
 
 
-def find_empty_slides(job):
+def find_empty_slides(slides):
     empty = []
-    for slide in job.get("slides", []):
+    for slide in slides:
         prompt = (slide.get("prompt") or "").strip()
         if not prompt:
             empty.append(slide.get("id", "?"))
@@ -42,10 +44,25 @@ def compose_prompt(job, slide):
     slide_prompt = slide["prompt"]
     if job.get("mode") == "raw":
         return slide_prompt
+    parts = []
+    style = (job.get("style") or "").strip()
+    if style:
+        parts.append("Overall visual style: " + style + ".")
     master = (job.get("master") or "").strip()
-    if not master:
-        return slide_prompt
-    return master + "\n\n" + slide_prompt
+    if master:
+        parts.append(master)
+    parts.append(slide_prompt)
+    text = "\n\n".join(parts)
+    if job.get("text_mode") == "overlay":
+        caption = slide.get("caption") or {}
+        position = caption.get("position", "top-left")
+        text += (
+            "\n\nLeave the "
+            + position
+            + " area clean and open with no text or lettering rendered in the image; "
+            + "a caption will be placed there separately."
+        )
+    return text
 
 
 def parse_env_file(path):
@@ -81,9 +98,15 @@ def load_api_key(search_root):
     return key
 
 
-def call_image_api(key, model, prompt, size, quality):
+def call_image_api(key, model, prompt, size, quality, count):
     payload = json.dumps(
-        {"model": model, "prompt": prompt, "size": size, "quality": quality}
+        {
+            "model": model,
+            "prompt": prompt,
+            "size": size,
+            "quality": quality,
+            "n": count,
+        }
     ).encode("utf-8")
     request = urllib.request.Request(
         API_URL,
@@ -94,9 +117,9 @@ def call_image_api(key, model, prompt, size, quality):
         },
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=300) as response:
+    with urllib.request.urlopen(request, timeout=600) as response:
         body = json.loads(response.read().decode("utf-8"))
-    return body["data"][0]["b64_json"]
+    return [item["b64_json"] for item in body["data"]]
 
 
 def center_crop(img, ratio_w, ratio_h):
@@ -138,24 +161,28 @@ def confirm(question, assume_yes):
     return answer in ("y", "yes")
 
 
-def print_estimate(job, frames_cost):
+def print_estimate(job, slides, variants, per_cost, only):
+    images = len(slides) * variants
     print("Job:      " + job.get("name", "untitled"))
     print("Mode:     " + job.get("mode", "branded"))
+    style = (job.get("style") or "").strip()
+    if style:
+        print("Style:    " + style)
+    if job.get("text_mode") == "overlay":
+        print("Text:     overlay (exact captions composited on top)")
     print(
-        "Format:   "
-        + job.get("format", "?")
-        + "  ("
-        + job.get("size", "?")
-        + ")"
+        "Format:   " + job.get("format", "?") + "  (" + job.get("size", "?") + ")"
     )
     print("Quality:  " + job.get("quality", "?"))
-    print("Frames:   " + str(len(frames_cost)))
+    if only:
+        print("Reshoot:  " + ", ".join(slide["id"] for slide in slides))
+    print("Variants: " + str(variants) + " per slide")
+    print("Images:   " + str(images))
     print("")
-    for slide_id, cost in frames_cost:
-        print("  " + slide_id + "   $" + format(cost, ".3f"))
-    total = sum(cost for _, cost in frames_cost)
+    for slide in slides:
+        print("  " + slide["id"] + "   $" + format(per_cost * variants, ".3f"))
     print("")
-    print("Estimated total: $" + format(total, ".3f"))
+    print("Estimated total: $" + format(per_cost * images, ".3f"))
     print("")
 
 
@@ -163,7 +190,10 @@ def resolve_job(workspace_path, selector):
     if selector:
         target = workspace.job_dir(workspace_path, selector)
         if not os.path.isfile(os.path.join(target, "job.json")):
-            print("No job with id '" + selector + "' under .postsmith/jobs/", file=sys.stderr)
+            print(
+                "No job with id '" + selector + "' under .postsmith/jobs/",
+                file=sys.stderr,
+            )
             sys.exit(2)
         return selector, target
     latest = workspace.latest_job(workspace_path)
@@ -173,15 +203,42 @@ def resolve_job(workspace_path, selector):
     return latest, workspace.job_dir(workspace_path, latest)
 
 
-def write_manifest(out_dir, job, job_id, frames):
+def select_slides(job, only):
+    slides = job["slides"]
+    if not only:
+        return slides
+    wanted = [token.strip() for token in only.split(",") if token.strip()]
+    index = {slide["id"]: slide for slide in slides}
+    missing = [token for token in wanted if token not in index]
+    if missing:
+        print("Unknown slide ids: " + ", ".join(missing), file=sys.stderr)
+        sys.exit(2)
+    return [index[token] for token in wanted]
+
+
+def clear_slide_files(out_dir, slide_id):
+    for path in glob.glob(os.path.join(out_dir, slide_id + "*.png")):
+        os.remove(path)
+
+
+def brand_summary(brand):
+    if not isinstance(brand, dict):
+        return {}
+    return {"palette": brand.get("palette", {}), "fonts": brand.get("fonts", {})}
+
+
+def write_manifest(out_dir, job, job_id, frames, brand):
     manifest = {
         "id": job_id,
         "name": job["name"],
         "mode": job.get("mode", "branded"),
+        "style": job.get("style", ""),
+        "text_mode": job.get("text_mode", "baked"),
         "format": job.get("format", ""),
         "size": job.get("size", ""),
         "quality": job.get("quality", ""),
         "model": job.get("model", ""),
+        "brand": brand_summary(brand),
         "total_cost": round(sum(frame["cost"] for frame in frames), 4),
         "frames": frames,
     }
@@ -190,12 +247,17 @@ def write_manifest(out_dir, job, job_id, frames):
     return manifest
 
 
-def run(selector=None, assume_yes=False):
+def run(selector=None, assume_yes=False, only=None, variants=1):
     workspace_path = workspace.init_workspace()
+    config = workspace.load_config(workspace_path)
+    brand = workspace.read_json(workspace.resolve_brand_path(workspace_path, config), {})
+
     job_id, out_dir = resolve_job(workspace_path, selector)
     job = load_job(os.path.join(out_dir, "job.json"))
+    variants = max(1, int(variants or 1))
 
-    empty = find_empty_slides(job)
+    slides = select_slides(job, only)
+    empty = find_empty_slides(slides)
     if empty:
         print(
             "Refusing to generate: empty slide prompts for ids " + ", ".join(empty),
@@ -207,11 +269,9 @@ def run(selector=None, assume_yes=False):
     size = job["size"]
     fmt = job.get("format", "")
     model = job.get("model", "gpt-image-2-2026-04-21")
+    per_cost = per_image_cost(quality, size)
 
-    frames_cost = [
-        (slide["id"], per_image_cost(quality, size)) for slide in job["slides"]
-    ]
-    print_estimate(job, frames_cost)
+    print_estimate(job, slides, variants, per_cost, only)
 
     if not confirm("Read OPENAI_API_KEY from .env to start this run?", assume_yes):
         print("Stopped before reading the key. Nothing was spent.")
@@ -225,13 +285,24 @@ def run(selector=None, assume_yes=False):
     with open(os.path.join(out_dir, "master.txt"), "w", encoding="utf-8") as handle:
         handle.write(job.get("master") or "")
 
-    frames = []
-    for slide in job["slides"]:
+    overlay = job.get("text_mode") == "overlay"
+    bake = overlay and textlayer.available()
+    if overlay and not bake:
+        print(
+            "Pillow not installed: captions are composited in the gallery instead of "
+            "baked into the PNG. Install Pillow to bake exact text into saved files."
+        )
+
+    new_frames = []
+    for slide in slides:
         slide_id = slide["id"]
+        caption = slide.get("caption") if overlay else None
         prompt = compose_prompt(job, slide)
-        print("Generating " + slide_id + " ...")
+        if only:
+            clear_slide_files(out_dir, slide_id)
+        print("Generating " + slide_id + " (" + str(variants) + ") ...")
         try:
-            b64 = call_image_api(key, model, prompt, size, quality)
+            images = call_image_api(key, model, prompt, size, quality, variants)
         except urllib.error.HTTPError as error:
             detail = error.read().decode("utf-8", "replace")
             print(
@@ -250,21 +321,41 @@ def run(selector=None, assume_yes=False):
                 file=sys.stderr,
             )
             sys.exit(1)
-        png_bytes = base64.b64decode(b64)
-        png_bytes = crop_to_format(png_bytes, fmt)
-        file_name = slide_id + ".png"
-        with open(os.path.join(out_dir, file_name), "wb") as handle:
-            handle.write(png_bytes)
-        frames.append(
-            {
+
+        for index, b64 in enumerate(images, 1):
+            png_bytes = crop_to_format(base64.b64decode(b64), fmt)
+            suffix = "" if index == 1 else "-" + str(index)
+            file_name = slide_id + suffix + ".png"
+            text_baked = False
+            if caption and bake:
+                with open(os.path.join(out_dir, slide_id + suffix + ".raw.png"), "wb") as handle:
+                    handle.write(png_bytes)
+                png_bytes = textlayer.apply(png_bytes, caption, brand, workspace.fonts_dir(workspace_path))
+                text_baked = True
+            with open(os.path.join(out_dir, file_name), "wb") as handle:
+                handle.write(png_bytes)
+            frame = {
                 "id": slide_id,
+                "variant": index,
                 "file": file_name,
                 "prompt": prompt,
-                "cost": per_image_cost(quality, size),
+                "cost": per_cost,
             }
-        )
+            if caption:
+                frame["caption"] = caption
+                frame["text_baked"] = text_baked
+            new_frames.append(frame)
 
-    manifest = write_manifest(out_dir, job, job_id, frames)
+    existing = workspace.read_json(os.path.join(out_dir, "manifest.json"), None)
+    if only and isinstance(existing, dict) and existing.get("frames"):
+        reshot = {slide["id"] for slide in slides}
+        kept = [frame for frame in existing["frames"] if frame.get("id") not in reshot]
+        frames = kept + new_frames
+    else:
+        frames = new_frames
+    frames.sort(key=lambda frame: (frame.get("id", ""), frame.get("variant", 1)))
+
+    manifest = write_manifest(out_dir, job, job_id, frames, brand)
 
     workspace.upsert_job(
         workspace_path,
@@ -276,6 +367,8 @@ def run(selector=None, assume_yes=False):
             "size": size,
             "quality": quality,
             "mode": job.get("mode", "branded"),
+            "style": job.get("style", ""),
+            "text_mode": job.get("text_mode", "baked"),
             "model": model,
             "frames": len(frames),
             "cost": manifest["total_cost"],
@@ -284,20 +377,22 @@ def run(selector=None, assume_yes=False):
     )
 
     print("")
-    print("Saved " + str(len(frames)) + " frames to " + out_dir)
+    print("Saved " + str(len(new_frames)) + " images to " + out_dir)
     print("Next: serve the gallery to review them.")
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Generate images for a postsmith job.")
     parser.add_argument("--job", help="job id under .postsmith/jobs/ (default: latest)")
+    parser.add_argument("--only", help="comma-separated slide ids to reshoot")
+    parser.add_argument("-n", "--variants", type=int, default=1, help="versions per slide")
     parser.add_argument(
         "--yes",
         action="store_true",
         help="skip both confirmations (key read and spend)",
     )
     args = parser.parse_args(argv)
-    run(args.job, assume_yes=args.yes)
+    run(args.job, assume_yes=args.yes, only=args.only, variants=args.variants)
 
 
 if __name__ == "__main__":

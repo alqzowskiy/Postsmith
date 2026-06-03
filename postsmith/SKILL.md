@@ -84,8 +84,22 @@ brand already states.
 ### 3. Ask production settings as numbered, pick-a-number questions
 
 Format, quality, caption language, number of slides. Defaults come from
-`.postsmith/config.json`. Topic and tone are not enumerable — take those from chat or
-`brand.json`.
+`.postsmith/config.json`.
+
+**Always ask the visual style — and accept free text.** Style is the rendering treatment:
+`editorial photo`, `anime`, `high-tech futuristic`, `35mm film`, `3D render`, `flat
+illustration`, `risograph`, anything. Offer a few examples but let the user type their own;
+do not constrain them to a list. Store it in `job.style`; it is woven into every branded
+prompt. (In `raw` mode, style is ignored.)
+
+**Ask how text should be rendered — it's the user's choice:**
+- `baked` (default): gpt-image-2 letters the captions itself. Simple, one image, but text can
+  be misspelled or wrong.
+- `overlay`: the model renders only the background (leaving space), and postsmith composites
+  the exact caption on top — guaranteed-correct words and numbers, in the brand display font.
+  Choose this whenever spelling/numbers must be exact. Store it in `job.text_mode`.
+
+Topic and tone are not enumerable — take those from chat or `brand.json`.
 
 - When the **user** runs the wizard in their own terminal, they get an interactive numbered
   menu: Enter keeps the default, a digit picks an option, free text gives a custom answer.
@@ -104,8 +118,16 @@ Write them into the job's `job.json`. See `references/prompt-templates.md`.
 
 gpt-image-2 renders in-image text well, so captions and infographic copy are viable — but
 **legible is not the same as correct**. For exact numbers, quote the literal string in the
-prompt and verify it in step 7. When precision is critical (pricing tables, real chart data),
-recommend a deterministic HTML/SVG render instead of trusting the model to letter the data.
+prompt and verify it in step 7.
+
+**When `text_mode` is `overlay`**, do *not* put the caption words in the slide prompt.
+Instead: write the slide prompt to describe the scene and **leave the caption area clear**
+(generate already appends a "leave the <position> area clean, no text" instruction), and put
+the words in a per-slide `caption` object: `{ "headline": "...", "subhead": "...",
+"position": "top-left" }` (positions: `top-left`, `bottom-left`, `center-left`; optional
+`color` as a brand palette key or hex). postsmith composites that caption with exact spelling
+— in the gallery via canvas for everyone, and baked into the PNG too when Pillow is installed.
+This is the right choice for prices, dates, and any copy that must be exact.
 
 ### 5. Show the estimate and the full prompt list — wait for an explicit yes
 
@@ -125,13 +147,21 @@ With no `--job`, the most recent job is used. When Claude runs it non-interactiv
 both confirmations in chat), pass `--yes`. PNGs, `manifest.json`, and `master.txt` are
 written into the job folder, and the job is appended to `registry.json`.
 
+Two flags shape the run:
+- `-n <N>` / `--variants <N>` — generate N versions of every selected slide (saved
+  `01.png`, `01-2.png`, …) so you can pick the best. Cost scales with N.
+- `--only 02,04` — regenerate just those slide ids (a **reshoot**), keeping the rest. The
+  estimate covers only the reshot frames, and the manifest/registry totals are updated.
+
 ### 7. Self-review
 
 `view` every generated PNG in `.postsmith/jobs/<id>/`. Judge each frame against the slide's
-intent and the `anti-slop.md` checklist. For text frames, confirm the caption is the **right
-words**, correctly spelled, and any numbers are exactly correct. Give a short per-slide
-verdict — **keep** or **reshoot** — and say why for reshoots. Offer to regenerate only the
-flagged frames, with a fresh spend confirmation.
+intent and the `anti-slop.md` checklist. For **baked** text frames, confirm the caption is
+the **right words**, correctly spelled, and any numbers are exactly correct. For **overlay**
+frames the words come from the `caption` object (always exact) — check instead that the
+composited text sits cleanly with room around it. Give a short per-slide verdict — **keep** or
+**reshoot** — and say why for reshoots. Offer to regenerate only the flagged frames with
+`generate --only <ids>` (a fresh spend confirmation).
 
 ### 8. Serve the gallery, and export to hand off
 

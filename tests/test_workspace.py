@@ -47,6 +47,7 @@ class WorkspaceTest(unittest.TestCase):
         self.assertTrue(os.path.isfile(workspace.brand_path(ws)))
         self.assertTrue(os.path.isdir(workspace.jobs_dir(ws)))
         self.assertTrue(os.path.isdir(workspace.exports_dir(ws)))
+        self.assertTrue(os.path.isdir(workspace.fonts_dir(ws)))
 
     def test_init_does_not_clobber_brand(self):
         ws = workspace.init_workspace(start=self.root)
